@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+package protos.Tipster;
+
+option go_package = "src/protos/Tipster;Tipster";
+option java_multiple_files = true;
+option java_package = "protos.Tipster";
+
+import "src/protos/Tipster/SocialMessage.proto";
+
+service SocialService {
+	rpc CreateUser (CreateUserRequest) returns (CreateUserResponse);
+	rpc GetUser (GetUserRequest) returns (GetUserResponse);
+	rpc UpdateUser (UpdateUserRequest) returns (UpdateUserResponse);
+	rpc DeleteUser (DeleteUserRequest) returns (DeleteUserResponse);
+	rpc ListUsers (ListUserRequest) returns (ListUserResponse);
+	rpc FollowTipster (FollowTipsterRequest) returns (FollowTipsterResponse);
+	rpc UnfollowTipster (UnFollowTipsterRequest) returns (UnfollowTipsterResponse);
+  
+	rpc CreateTip (CreateTipRequest) returns (CreateTipResponse);
+	rpc GetTip (GetTipRequest) returns (GetTipResponse);
+	rpc UpdateTip (UpdateTipRequest) returns (UpdateTipResponse);
+	rpc DeleteTip (DeleteTipRequest) returns (DeleteTipResponse);
+	rpc ListTips (ListTipsRequest) returns (ListTipsResponse);
+	rpc ShareTip (ShareTipRequest) returns (ShareTipResponse);
+	rpc LikeTip (LikeTipRequest) returns (LikeTipResponse);
+	rpc UnlikeTip (UnlikeTipRequest) returns (UnlikeTipResponse);
+  
+	rpc CommentOnTip (CommentOnTipRequest) returns (CommentOnTipResponse);
+	rpc UpdateComment (UpdateCommentRequest) returns (UpdateCommentResponse);
+	rpc DeleteComment (DeleteCommentRequest) returns (DeleteCommentResponse);
+	rpc ListTipComments (ListTipCommentsRequest) returns (ListTipCommentsResponse);
+	rpc LikeComment (LikeCommentRequest) returns (LikeCommentResponse);
+	rpc UnlikeComment (UnlikeCommentRequest) returns (UnlikeCommentResponse);
+	rpc ReplyComment (ReplyCommentRequest) returns (ReplyCommentResponse);
+	rpc ListCommentReplies (ListCommentRepliesRequest) returns (ListCommentRepliesResponse);
+	rpc ListComments (ListCommentsRequest) returns (ListCommentsResponse);
+	
+	rpc ListFollowingFeed (ListFollowingFeedRequest) returns (ListFollowingFeedResponse);
+  }

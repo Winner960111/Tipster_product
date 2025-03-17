@@ -1,0 +1,36 @@
+syntax = "proto3";
+package kratos.api;
+
+option go_package = "src/internal/conf;conf";
+
+import "google/protobuf/duration.proto";
+
+message Bootstrap {
+  Server server = 1;
+  MongoDbConnection mongodb = 2;
+  GRPCServer grpc_server = 3;
+  Consul consul = 4;
+}
+
+message Server {
+  message HTTP {
+    string network = 1;
+    string addr = 2;
+    google.protobuf.Duration timeout = 3;
+  }
+  HTTP http = 1;
+}
+
+message MongoDbConnection {
+  string uri = 1;
+  string database = 2;
+}
+
+message GRPCServer {
+  int32 port = 1;
+  string host = 2;
+}
+
+message Consul {
+  string address = 1;
+} 

@@ -1,0 +1,10 @@
+FROM artifacts.ym-dev.org:8083/mongo:7.0.12
+
+ENV MONGO_INITDB_ROOT_USERNAME=root
+ENV MONGO_INITDB_ROOT_PASSWORD=pass.123
+
+COPY ./database/mongo/setup.js /etc/mongo/setup.js
+COPY ./database/mongo/init-data /etc/mongo/init-data
+COPY ./database/mongo/mongo-init-setup.sh /docker-entrypoint-initdb.d/mongo-init-setup.sh
+
+CMD [ "--auth", "--quiet", "--bind_ip_all" ]

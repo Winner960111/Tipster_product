@@ -1,0 +1,111 @@
+syntax = "proto3";
+
+package YM.Common;
+option csharp_namespace = "YM.Message.Common";
+option go_package = "src/protos/YM.Common;commonpb";
+import "google/protobuf/timestamp.proto";
+
+message PKeyString {
+  string Value =1;
+}
+
+message PKeyInt {
+  int32 Value =1;
+}
+
+message PKeyLong {
+  int64 Value =1;
+}
+
+message KeyValuePair{
+  string Key = 1;
+  string Value = 2;
+}
+
+message Dictionary{
+  repeated KeyValuePair Data = 1;
+}
+
+
+message NullableBool {
+  bool Value =1;
+}
+
+message NullableDecimal {
+  string value =1;
+}
+
+message NullableUInt{
+  uint32 Value = 1;
+}
+
+message ResponseBase{
+  string Code = 1;  
+}
+
+message ResponseBaseWithInt{
+  string Code = 1;
+  int32 PKeyInt = 2;
+}
+
+message ResponseBaseWithLong{
+  string Code = 1;
+  int64 PKeyLong = 2;
+}
+
+message ResponseBaseWithString{
+  string Code = 1;
+  string PKeyString = 2;
+}
+
+message ResponseBaseWithKeyDictionary{
+  string Code = 1;
+  Dictionary Data = 2;
+}
+
+message NullableInt {
+  int32 value = 1;
+}
+
+message NullableTimestamp{
+  google.protobuf.Timestamp Data=1;
+}
+
+message GenericLongCollection {
+  repeated int64 Values = 1;
+}
+
+message GenericIntCollection {
+  repeated int32 Values = 1;
+}
+
+message GenericStringCollection {
+  repeated string Values = 1;
+}
+
+message ResponseBaseWithBool {
+  string Code = 1;
+  bool Value = 2;
+}
+
+message PageFilter {
+  int32 PageSize = 1;
+  int32 PageIndex = 2;
+}
+
+message ChunkStream {
+  bytes Chunk = 1;
+}
+
+message DateRange {
+    google.protobuf.Timestamp DateStart = 1;
+    google.protobuf.Timestamp DateEnd = 2;
+}
+
+message NullableLong {
+  int64 value = 1;
+}
+
+message NullableDouble {
+  double value = 1;
+}

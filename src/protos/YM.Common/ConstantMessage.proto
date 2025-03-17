@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package YM.Common;
+option csharp_namespace = "YM.Message.Common";
+option go_package = "src/protos/YM.Common;commonpb";
+enum AccountStatus {
+  AccountStatusNone = 0;
+  Active = 1;
+  Inactive = 2;
+  Suspend = 3;
+  SelfExclude = 4;
+  Delete = 5;
+  Pending = 6;
+}
+
+enum IdendityProvider {
+  IdendityProviderNone = 0;
+  Google = 1;
+  Telegram = 2;
+}

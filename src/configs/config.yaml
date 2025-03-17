@@ -1,0 +1,2 @@
+consul:
+  address: localhost:9000

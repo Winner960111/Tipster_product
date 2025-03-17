@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+package YM.Transaction;
+option csharp_namespace = "YM.Message.Transaction";
+option go_package = "src/protos/YM.Transaction;transactionpb";
+import "YM.Common/CommonMessage.proto";
+import "YM.Common/ConstantMessage.proto";
+import "google/protobuf/timestamp.proto";
+import "YM.Transaction/OrderMessage.proto";
+
+service OrderService {
+  
+  rpc CreateOrder(OrderInfo) returns (CreateOrderResponse); 
+  rpc CreateOrderPayment(CreateOrderPaymentRequest) returns (YM.Common.ResponseBase); 
+  rpc UpdatePayment(UpdatePaymentRequest) returns (YM.Common.ResponseBase);
+  rpc UpdatePaymentResult(UpdatePaymentResultRequest) returns (YM.Common.ResponseBase);
+  rpc GetOrderByPlatformId(SearchOrderByPlatformId) returns (GetOrderResponse);
+  rpc GetOrderById(YM.Common.PKeyString) returns (GetOrderResponse); //傳入OrderId
+
+  // 記錄每筆invoice的狀態改變記錄 (將來會在後台查詢)
+  // 這支api需要同時更新
+  // - Transaction (upsert)
+  //   - Status
+  //   - PeriodStart
+  //   - PeriodEnd
+  // - TransactionLog (insert)
+  // - Order (update)
+  //   - CurrentPeriodStart
+  //   - CurrentPeriodEnd
+  rpc AddTransactionRecord(TransactionInfo) returns (YM.Common.ResponseBase);
+
+  // 供後台使用
+  rpc GetOrdersByMember(YM.Common.PKeyString) returns (GetOrdersResponse); //傳入MemberId
+  rpc GetTransactionById(YM.Common.PKeyString) returns (GetTransactionResponse);
+  rpc GetTransactionByOrderId(YM.Common.PKeyString) returns (GetTransactionsResponse);
+}
+
