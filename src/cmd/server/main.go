@@ -188,13 +188,17 @@ func main() {
 		"module", "order",
 		"service", "transaction.v1.OrderService",
 	)
+	socialLogger := log.With(logger,
+		"module", "social",
+		"service", "social.v1.SocialService",
+	)
 
 	// Initialize repository
 	// db := mongoClient.Database(bc.Mongodb.Database)
-	db := mongoClient.Database("Tipster")
+	db := mongoClient.Database("tipster")
 	transactionRepo := repository.NewTransactionRepository(db, transactionLogger)
 	orderRepo := repository.NewOrderRepository(db, orderLogger)
-
+	socialRepo := repository.NewSocialRepository(db, socialLogger)
 	// HTTP Server
 	httpSrv := http.NewServer(
 		http.Address(":8000"),
@@ -202,7 +206,7 @@ func main() {
 
 	// gRPC Server
 	// grpcAddr := fmt.Sprintf("%s:%d", bc.GrpcServer.Host, bc.GrpcServer.Port)
-	grpcAddr := fmt.Sprintf("%s:%d", "0.0.0.0", 5000)
+	grpcAddr := fmt.Sprintf("%s:%d", "0.0.0.0", 9000)
 	grpcSrv := grpc.NewServer(
 		grpc.Address(grpcAddr),
 		grpc.Middleware(
@@ -218,7 +222,10 @@ func main() {
 		transactionRepo,
 		orderLogger,
 	)
-	solcialSvc := service.NewSocialServiceService()
+	solcialSvc := service.NewSocialServiceService(
+		socialRepo,
+		socialLogger,
+	)
 	ymtransactionpb.RegisterOrderServiceServer(grpcSrv, orderSvc)
 	pb.RegisterSocialServiceServer(grpcSrv, solcialSvc)
 	app := newApp(logger, httpSrv, grpcSrv)
