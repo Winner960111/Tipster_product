@@ -20,7 +20,6 @@ import (
 	"src/internal/repository"
 	"src/internal/service"
 	pb "src/protos/Tipster"
-	ymtransactionpb "src/protos/YM.Transaction"
 )
 
 // go build -ldflags "-X main.Version=x.y.z"
@@ -178,16 +177,6 @@ func main() {
 	}
 	defer mongoClient.Disconnect(context.Background())
 
-	// Initialize repository with Kratos logger
-	transactionLogger := log.With(logger,
-		"module", "transaction",
-		"service", "transaction.v1.TransactionService",
-	)
-
-	orderLogger := log.With(logger,
-		"module", "order",
-		"service", "transaction.v1.OrderService",
-	)
 	socialLogger := log.With(logger,
 		"module", "social",
 		"service", "social.v1.SocialService",
@@ -196,8 +185,6 @@ func main() {
 	// Initialize repository
 	// db := mongoClient.Database(bc.Mongodb.Database)
 	db := mongoClient.Database("tipster")
-	transactionRepo := repository.NewTransactionRepository(db, transactionLogger)
-	orderRepo := repository.NewOrderRepository(db, orderLogger)
 	socialRepo := repository.NewSocialRepository(db, socialLogger)
 	// HTTP Server
 	httpSrv := http.NewServer(
@@ -216,17 +203,10 @@ func main() {
 
 	logger.Log(log.LevelInfo, "msg", "starting gRPC server", "address", grpcAddr)
 
-	// Register order service
-	orderSvc := service.NewOrderServer(
-		orderRepo,
-		transactionRepo,
-		orderLogger,
-	)
 	solcialSvc := service.NewSocialServiceService(
 		socialRepo,
 		socialLogger,
 	)
-	ymtransactionpb.RegisterOrderServiceServer(grpcSrv, orderSvc)
 	pb.RegisterSocialServiceServer(grpcSrv, solcialSvc)
 	app := newApp(logger, httpSrv, grpcSrv)
 	if err := app.Run(); err != nil {

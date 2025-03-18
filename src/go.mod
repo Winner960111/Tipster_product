@@ -3,7 +3,6 @@ module src
 go 1.23.1
 
 require (
-	github.com/bwmarrin/snowflake v0.3.0
 	github.com/go-kratos/kratos/v2 v2.8.3
 	go.mongodb.org/mongo-driver v1.17.2
 	google.golang.org/grpc v1.69.4

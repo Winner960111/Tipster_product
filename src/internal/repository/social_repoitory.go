@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/go-kratos/kratos/v2/log"
@@ -23,28 +24,124 @@ type SocialRepository interface {
 	ListUsers(ctx context.Context, filter bson.M, limit int64) ([]*model.User, error)
 	FollowTipster(ctx context.Context, userID, tipsterID primitive.ObjectID) error
 	UnfollowTipster(ctx context.Context, userID, tipsterID primitive.ObjectID) error
+	CreateTip(ctx context.Context, tip *model.Tip) (primitive.ObjectID, error)
+	GetTip(ctx context.Context, tipID primitive.ObjectID) (*model.Tip, error)
+	UpdateTip(ctx context.Context, tipID primitive.ObjectID, updates bson.M) (*model.Tip, error)
+	DeleteTip(ctx context.Context, tipID primitive.ObjectID) error
+	ListTips(ctx context.Context, filter bson.M, pageSize int64, nextCursor string) ([]*model.Tip, primitive.ObjectID, error)
+	LikeTip(ctx context.Context, tipID, userID primitive.ObjectID) (int32, error)
+	UnlikeTip(ctx context.Context, tipID, userID primitive.ObjectID) (int32, error)
+	ShareTip(ctx context.Context, tipID primitive.ObjectID, shareType string, updatedAt time.Time) error
+	CreateComment(ctx context.Context, comment *model.Comment) (primitive.ObjectID, error)
+	UpdateComment(ctx context.Context, commentID primitive.ObjectID, content string, updatedAt time.Time) error
+	DeleteComment(ctx context.Context, commentID primitive.ObjectID) error
+	ListTip(ctx context.Context, tipID string) ([]*model.Comment, error)
+	LikeComment(ctx context.Context, commentID, userID primitive.ObjectID) (int32, error)
+	UnlikeComment(ctx context.Context, commentID, userID primitive.ObjectID) (int32, error)
+	CreateReply(ctx context.Context, reply *model.Comment) (primitive.ObjectID, error)
+	ListReplies(ctx context.Context, parentCommentID string) ([]*model.Comment, error)
+	ListComments(ctx context.Context, pageSize int64, nextCursor string) ([]*model.Comment, string, error)
 }
 
 type socialRepository struct {
-	collection *mongo.Collection
-	logger     log.Logger
+	collection        *mongo.Collection
+	tipCollection     *mongo.Collection
+	commentCollection *mongo.Collection
+	logger            log.Logger
 }
 
 func NewSocialRepository(db *mongo.Database, logger log.Logger) SocialRepository {
 	collection := db.Collection("users")
-
+	tipCollection := db.Collection("tips")
+	commentCollection := db.Collection("comments")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	_, err := collection.CountDocuments(ctx, bson.M{})
-	if err != nil {
-		logger.Log(log.LevelError, "msg", "Failed to connect to collection users", "error", err)
-	} else {
-		logger.Log(log.LevelInfo, "msg", "Successfully connected to collection users")
+	// User Collection Indexes
+	userIndexes := []mongo.IndexModel{
+		{
+			Keys:    bson.D{{Key: "email", Value: 1}},
+			Options: options.Index().SetUnique(true).SetName("idx_email_unique"),
+		},
+		{
+			Keys:    bson.D{{Key: "username", Value: 1}},
+			Options: options.Index().SetName("idx_username_unique"),
+		},
+		{
+			Keys:    bson.D{{Key: "tags", Value: 1}},
+			Options: options.Index().SetName("idx_tags"),
+		},
+		{
+			Keys: bson.D{
+				{Key: "createdAt", Value: -1},
+				{Key: "updatedAt", Value: -1},
+			},
+			Options: options.Index().SetName("idx_user_timestamps"),
+		},
 	}
+
+	// Tip Collection Indexes
+	tipIndexes := []mongo.IndexModel{
+		{
+			Keys:    bson.D{{Key: "tipsterId", Value: 1}},
+			Options: options.Index().SetName("idx_tipsterId"),
+		},
+		{
+			Keys:    bson.D{{Key: "tags", Value: 1}},
+			Options: options.Index().SetName("idx_tip_tags"),
+		},
+		{
+			Keys: bson.D{
+				{Key: "createdAt", Value: -1},
+				{Key: "updatedAt", Value: -1},
+			},
+			Options: options.Index().SetName("idx_tip_timestamps"),
+		},
+	}
+
+	// Comment Collection Indexes
+	commentIndexes := []mongo.IndexModel{
+		{
+			Keys:    bson.D{{Key: "tipId", Value: 1}},
+			Options: options.Index().SetName("idx_tipId"),
+		},
+		{
+			Keys:    bson.D{{Key: "userId", Value: 1}},
+			Options: options.Index().SetName("idx_userId"),
+		},
+		{
+			Keys:    bson.D{{Key: "parentId", Value: 1}},
+			Options: options.Index().SetName("idx_parentId"),
+		},
+		{
+			Keys: bson.D{
+				{Key: "createdAt", Value: -1},
+				{Key: "updatedAt", Value: -1},
+			},
+			Options: options.Index().SetName("idx_comment_timestamps"),
+		},
+	}
+
+	// Create indexes for each collection
+	createIndexes(ctx, collection, userIndexes, logger)
+	createIndexes(ctx, tipCollection, tipIndexes, logger)
+	createIndexes(ctx, commentCollection, commentIndexes, logger)
+
 	return &socialRepository{
-		collection: collection,
-		logger:     logger,
+		collection:        collection,
+		tipCollection:     tipCollection,
+		commentCollection: commentCollection,
+		logger:            logger,
+	}
+}
+
+func createIndexes(ctx context.Context, collection *mongo.Collection, indexes []mongo.IndexModel, logger log.Logger) {
+	_, err := collection.Indexes().CreateMany(ctx, indexes)
+	if err != nil {
+		logger.Log(log.LevelError, "msg", fmt.Sprintf("Failed to create indexes for collection %s", collection.Name()), "error", err)
+		panic(fmt.Sprintf("Failed to create indexes: %v", err))
+	} else {
+		logger.Log(log.LevelInfo, "msg", fmt.Sprintf("Indexes created successfully for collection %s", collection.Name()))
 	}
 }
 
@@ -199,4 +296,371 @@ func (r *socialRepository) UnfollowTipster(ctx context.Context, userID, tipsterI
 	})
 
 	return err
+}
+func (r *socialRepository) CreateTip(ctx context.Context, tip *model.Tip) (primitive.ObjectID, error) {
+
+	result, err := r.tipCollection.InsertOne(ctx, tip)
+	if err != nil {
+		return primitive.NilObjectID, err
+	}
+	return result.InsertedID.(primitive.ObjectID), nil
+}
+func (r *socialRepository) GetTip(ctx context.Context, tipID primitive.ObjectID) (*model.Tip, error) {
+	var tip model.Tip
+	err := r.tipCollection.FindOne(ctx, bson.M{"_id": tipID}).Decode(&tip)
+	if err != nil {
+		return nil, err
+	}
+	return &tip, nil
+}
+func (r *socialRepository) UpdateTip(ctx context.Context, tipID primitive.ObjectID, updates bson.M) (*model.Tip, error) {
+	var updatedTip model.Tip
+	err := r.tipCollection.FindOneAndUpdate(
+		ctx,
+		bson.M{"_id": tipID},
+		updates,
+		options.FindOneAndUpdate().SetReturnDocument(options.After),
+	).Decode(&updatedTip)
+
+	if err != nil {
+		return nil, err
+	}
+	return &updatedTip, nil
+}
+func (r *socialRepository) DeleteTip(ctx context.Context, tipID primitive.ObjectID) error {
+	result, err := r.tipCollection.DeleteOne(ctx, bson.M{"_id": tipID})
+	if err != nil {
+		return err
+	}
+	if result.DeletedCount == 0 {
+		return mongo.ErrNoDocuments
+	}
+	return nil
+}
+func (r *socialRepository) ListTips(ctx context.Context, filter bson.M, pageSize int64, nextCursor string) ([]*model.Tip, primitive.ObjectID, error) {
+	if nextCursor != "" {
+		cursorID, err := primitive.ObjectIDFromHex(nextCursor)
+		if err != nil {
+			return nil, primitive.NilObjectID, err
+		}
+		filter["_id"] = bson.M{"$gt": cursorID}
+	}
+
+	findOptions := options.Find().SetLimit(pageSize).SetSort(bson.M{"_id": 1})
+	cursor, err := r.tipCollection.Find(ctx, filter, findOptions)
+	if err != nil {
+		return nil, primitive.NilObjectID, err
+	}
+	defer cursor.Close(ctx)
+
+	var tips []*model.Tip
+	var lastTipID primitive.ObjectID
+	for cursor.Next(ctx) {
+		var tip model.Tip
+		if err := cursor.Decode(&tip); err == nil {
+			tips = append(tips, &tip)
+			lastTipID = tip.ID
+		}
+	}
+	return tips, lastTipID, cursor.Err()
+}
+
+func (r *socialRepository) LikeTip(ctx context.Context, tipID, userID primitive.ObjectID) (int32, error) {
+	// Check if user already liked the tip
+	var existingTip struct {
+		Likes []primitive.ObjectID `bson:"likes"`
+	}
+	err := r.tipCollection.FindOne(ctx, bson.M{"_id": tipID, "likes": userID}).Decode(&existingTip)
+	if err == nil {
+		// User already liked this tip
+		return int32(len(existingTip.Likes)), nil
+	}
+
+	// Add userId to `likes` array and remove from `unlikes`
+	update := bson.M{
+		"$pull": bson.M{
+			"unlikes": userID, // Remove user from `unlikes` if they previously disliked
+		},
+		"$addToSet": bson.M{
+			"likes": userID, // Ensure userId is only added once
+		},
+	}
+
+	// Get updated document
+	var updatedTip struct {
+		Likes []primitive.ObjectID `bson:"likes"`
+	}
+	err = r.tipCollection.FindOneAndUpdate(
+		ctx,
+		bson.M{"_id": tipID},
+		update,
+		options.FindOneAndUpdate().SetReturnDocument(options.After),
+	).Decode(&updatedTip)
+
+	if err != nil {
+		return 0, err
+	}
+
+	// Compute total likes safely
+	return int32(len(updatedTip.Likes)), nil
+}
+func (r *socialRepository) UnlikeTip(ctx context.Context, tipID, userID primitive.ObjectID) (int32, error) {
+	// Check if user already unliked the tip
+	var existingTip struct {
+		Unlikes []primitive.ObjectID `bson:"unlikes"`
+	}
+	err := r.tipCollection.FindOne(ctx, bson.M{"_id": tipID, "unlikes": userID}).Decode(&existingTip)
+	if err == nil {
+		// User already unliked this tip
+		return int32(len(existingTip.Unlikes)), nil
+	}
+
+	// Add unlike and remove like if exists
+	update := bson.M{
+		"$pull": bson.M{
+			"likes": userID, // Remove user from `likes` if they previously liked
+		},
+		"$addToSet": bson.M{
+			"unlikes": userID, // Ensure userId is only added once
+		},
+	}
+
+	// Get updated document
+	var updatedTip struct {
+		Unlikes []primitive.ObjectID `bson:"unlikes"`
+	}
+	err = r.tipCollection.FindOneAndUpdate(
+		ctx,
+		bson.M{"_id": tipID},
+		update,
+		options.FindOneAndUpdate().SetReturnDocument(options.After),
+	).Decode(&updatedTip)
+
+	if err != nil {
+		return 0, err
+	}
+
+	// Compute total unlikes safely
+	return int32(len(updatedTip.Unlikes)), nil
+}
+func (r *socialRepository) ShareTip(ctx context.Context, tipID primitive.ObjectID, shareType string, updatedAt time.Time) error {
+	_, err := r.tipCollection.UpdateOne(
+		ctx,
+		bson.M{"_id": tipID},
+		bson.M{
+			"$set": bson.M{
+				"shareType": shareType,
+				"updatedAt": updatedAt,
+			},
+		},
+	)
+	return err
+}
+
+func (r *socialRepository) CreateComment(ctx context.Context, comment *model.Comment) (primitive.ObjectID, error) {
+	result, err := r.commentCollection.InsertOne(ctx, comment)
+	if err != nil {
+		return primitive.NilObjectID, err
+	}
+	return result.InsertedID.(primitive.ObjectID), nil
+}
+
+func (r *socialRepository) UpdateComment(ctx context.Context, commentID primitive.ObjectID, content string, updatedAt time.Time) error {
+	update := bson.M{
+		"$set": bson.M{
+			"content":   content,
+			"updatedAt": updatedAt,
+		},
+	}
+
+	result := r.commentCollection.FindOneAndUpdate(
+		ctx,
+		bson.M{"_id": commentID},
+		update,
+		options.FindOneAndUpdate().SetReturnDocument(options.After),
+	)
+
+	if result.Err() != nil {
+		return result.Err()
+	}
+
+	return nil
+}
+
+func (r *socialRepository) DeleteComment(ctx context.Context, commentID primitive.ObjectID) error {
+	result, err := r.commentCollection.DeleteOne(ctx, bson.M{"_id": commentID})
+	if err != nil {
+		return err
+	}
+	if result.DeletedCount == 0 {
+		return mongo.ErrNoDocuments
+	}
+	return nil
+}
+func (r *socialRepository) ListTip(ctx context.Context, tipID string) ([]*model.Comment, error) {
+	cursor, err := r.commentCollection.Find(ctx, bson.M{"tipId": tipID})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var comments []*model.Comment
+	for cursor.Next(ctx) {
+		var comment model.Comment
+		if err := cursor.Decode(&comment); err == nil {
+			comments = append(comments, &comment)
+		}
+	}
+	return comments, cursor.Err()
+}
+
+func (r *socialRepository) LikeComment(ctx context.Context, commentID, userID primitive.ObjectID) (int32, error) {
+
+	// Check if user already liked the comment
+	var existingComment struct {
+		Likes []primitive.ObjectID `bson:"likes"`
+	}
+	err := r.commentCollection.FindOne(ctx, bson.M{"_id": commentID, "likes": userID}).Decode(&existingComment)
+	if err == nil {
+		// User already liked this comment
+		return int32(len(existingComment.Likes)), nil
+	}
+
+	// Add userId to `likes` array and remove from `unlikes`
+	update := bson.M{
+		"$pull": bson.M{
+			"unlikes": userID, // Remove user from `unlikes` if they previously disliked
+		},
+		"$addToSet": bson.M{
+			"likes": userID, // Ensure userId is only added once
+		},
+	}
+
+	// Get updated document
+	var updatedComment struct {
+		Likes []primitive.ObjectID `bson:"likes"`
+	}
+	err = r.commentCollection.FindOneAndUpdate(
+		ctx,
+		bson.M{"_id": commentID},
+		update,
+		options.FindOneAndUpdate().SetReturnDocument(options.After),
+	).Decode(&updatedComment)
+
+	if err != nil {
+		return 0, err
+	}
+
+	// Compute total likes safely
+	return int32(len(updatedComment.Likes)), nil
+}
+
+func (r *socialRepository) UnlikeComment(ctx context.Context, commentID, userID primitive.ObjectID) (int32, error) {
+
+	// Check if user already unliked the comment
+	var existingComment struct {
+		Unlikes []primitive.ObjectID `bson:"unlikes"`
+	}
+	err := r.commentCollection.FindOne(ctx, bson.M{"_id": commentID, "unlikes": userID}).Decode(&existingComment)
+	if err == nil {
+		// User already unliked this comment
+		return int32(len(existingComment.Unlikes)), nil
+	}
+
+	// Add userId to `unlikes` array and remove from `likes`
+	update := bson.M{
+		"$pull": bson.M{
+			"likes": userID, // Remove user from `likes` if they previously liked
+		},
+		"$addToSet": bson.M{
+			"unlikes": userID, // Ensure userId is only added once
+		},
+	}
+
+	// Get updated document
+	var updatedComment struct {
+		Unlikes []primitive.ObjectID `bson:"unlikes"`
+	}
+	err = r.commentCollection.FindOneAndUpdate(
+		ctx,
+		bson.M{"_id": commentID},
+		update,
+		options.FindOneAndUpdate().SetReturnDocument(options.After),
+	).Decode(&updatedComment)
+
+	if err != nil {
+		return 0, err
+	}
+
+	// Compute total unlikes safely
+	return int32(len(updatedComment.Unlikes)), nil
+}
+
+func (r *socialRepository) CreateReply(ctx context.Context, reply *model.Comment) (primitive.ObjectID, error) {
+	if reply.ID.IsZero() {
+		reply.ID = primitive.NewObjectID() // Ensure the reply has a valid ObjectID
+	}
+	result, err := r.commentCollection.InsertOne(ctx, reply)
+	if err != nil {
+		return primitive.NilObjectID, err
+	}
+	return result.InsertedID.(primitive.ObjectID), nil
+}
+
+func (r *socialRepository) ListReplies(ctx context.Context, parentCommentID string) ([]*model.Comment, error) {
+	cursor, err := r.commentCollection.Find(ctx, bson.M{"parentId": parentCommentID})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var replies []*model.Comment
+	for cursor.Next(ctx) {
+		var reply model.Comment
+		if err := cursor.Decode(&reply); err == nil {
+			replies = append(replies, &reply)
+		}
+	}
+	return replies, cursor.Err()
+}
+
+func (r *socialRepository) ListComments(ctx context.Context, pageSize int64, nextCursor string) ([]*model.Comment, string, error) {
+
+	findOptions := options.Find()
+	findOptions.SetLimit(pageSize)
+	findOptions.SetSort(bson.M{"_id": 1})
+
+	filter := bson.M{}
+	if nextCursor != "" {
+		lastID, err := primitive.ObjectIDFromHex(nextCursor)
+		if err != nil {
+			return nil, "", err
+		}
+		filter["_id"] = bson.M{"$gt": lastID}
+	}
+
+	cursor, err := r.commentCollection.Find(ctx, filter, findOptions)
+	if err != nil {
+		return nil, "", err
+	}
+	defer cursor.Close(ctx)
+
+	var comments []*model.Comment
+	var lastCommentID primitive.ObjectID
+
+	for cursor.Next(ctx) {
+		var comment model.Comment
+		if err := cursor.Decode(&comment); err != nil {
+			continue
+		}
+		comments = append(comments, &comment)
+		lastCommentID = comment.ID
+	}
+
+	nextCursor = ""
+	if len(comments) == int(pageSize) {
+		nextCursor = lastCommentID.Hex()
+	}
+
+	return comments, nextCursor, nil
 }

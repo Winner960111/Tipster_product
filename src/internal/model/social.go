@@ -1,16 +1,12 @@
 package model
 
 import (
-	"context"
-	"fmt"
 	"time"
 
 	"github.com/go-kratos/kratos/v2/log"
 
-	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type User struct {
@@ -37,60 +33,34 @@ type UserUpdates struct {
 	UpdatedAt time.Time `bson:"updatedAt"`
 }
 
-type SocialRepo struct {
-	collection *mongo.Collection
-	logger     log.Logger
+type Tip struct {
+	ID        primitive.ObjectID   `bson:"_id,omitempty"`
+	TipsterID string               `bson:"tipsterId"`
+	Title     string               `bson:"title"`
+	Content   string               `bson:"content"`
+	Tags      []string             `bson:"tags"`
+	ShareType string               `bson:"shareType"`
+	Likes     []primitive.ObjectID `bson:"likes"`
+	Unlikes   []primitive.ObjectID `bson:"unlikes"`
+	CreatedAt time.Time            `bson:"createdAt"`
+	UpdatedAt time.Time            `bson:"updatedAt"`
 }
 
-func NewSocialRepo(db *mongo.Database, logger log.Logger) *SocialRepo {
-	collection := db.Collection("users")
+type Comment struct {
+	ID        primitive.ObjectID   `bson:"_id"`
+	TipID     string               `bson:"tipId"`
+	UserID    string               `bson:"userId"`
+	ParentID  string               `bson:"parentId"`
+	Content   string               `bson:"content"`
+	Likes     []primitive.ObjectID `bson:"likes"`
+	Unlikes   []primitive.ObjectID `bson:"unlikes"`
+	CreatedAt time.Time            `bson:"createdAt"`
+	UpdatedAt time.Time            `bson:"updatedAt"`
+}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	_, err := collection.CountDocuments(ctx, bson.M{})
-	if err != nil {
-		logger.Log(log.LevelError, "msg", "Failed to connect to collection users", "error", err)
-	} else {
-		logger.Log(log.LevelInfo, "msg", "Successfully connected to collection users")
-	}
-
-	indexes := []mongo.IndexModel{
-		{
-			Keys:    bson.D{{Key: "email", Value: 1}},
-			Options: options.Index().SetUnique(true).SetName("idx_email_unique"),
-		},
-		{
-			Keys:    bson.D{{Key: "username", Value: 1}},
-			Options: options.Index().SetUnique(true).SetName("idx_username_unique"),
-		},
-		{
-			Keys:    bson.D{{Key: "tags", Value: 1}},
-			Options: options.Index().SetName("idx_tags"),
-		},
-		{
-			Keys: bson.D{
-				{Key: "following", Value: 1},
-				{Key: "followers", Value: 1},
-			},
-			Options: options.Index().SetName("idx_social_graph"),
-		},
-		{
-			Keys: bson.D{
-				{Key: "createdAt", Value: -1},
-				{Key: "updatedAt", Value: -1},
-			},
-			Options: options.Index().SetName("idx_timestamps"),
-		},
-	}
-
-	_, err = collection.Indexes().CreateMany(context.Background(), indexes)
-	if err != nil {
-		panic(fmt.Sprintf("Failed to create indexes: %v", err))
-	}
-
-	return &SocialRepo{
-		collection: collection,
-		logger:     logger,
-	}
+type SocialRepo struct {
+	userCollection    *mongo.Collection
+	tipCollection     *mongo.Collection
+	commentCollection *mongo.Collection
+	logger            log.Logger
 }

@@ -416,6 +416,7 @@ message UpdateCommentRequest {
 	string Code = 1;
 	string Msg = 2;
 	repeated CommentInfo Comments = 3;
+	string NextCursor = 4;
   }
   
   // -------------------
