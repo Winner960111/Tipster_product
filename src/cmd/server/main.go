@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
 
 	"github.com/go-kratos/kratos/v2"
 	"github.com/go-kratos/kratos/v2/config"
@@ -14,9 +16,11 @@ import (
 	"github.com/go-kratos/kratos/v2/middleware/tracing"
 	"github.com/go-kratos/kratos/v2/transport/grpc"
 	"github.com/go-kratos/kratos/v2/transport/http"
+	consulAPI "github.com/hashicorp/consul/api"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 
+	"src/internal/conf"
 	"src/internal/repository"
 	"src/internal/service"
 	pb "src/protos/Tipster"
@@ -25,7 +29,7 @@ import (
 // go build -ldflags "-X main.Version=x.y.z"
 var (
 	// Name is the name of the compiled software.
-	Name = "domain.service.transaction"
+	Name = "domain.service.tipster"
 	// Version is the version of the compiled software.
 	Version string
 	// configPath is the config file path.
@@ -57,10 +61,10 @@ type GlobalConfig struct {
 		ShutdownTimeoutInSecond int `json:"ShutdownTimeoutInSecond"`
 	} `json:"AppSettings"`
 	DomainService struct {
-		Transaction struct {
+		Tipster struct {
 			HostName string `json:"HostName"`
 			Port     string `json:"Port"`
-		} `json:"Transaction"`
+		} `json:"Tipster"`
 	} `json:"DomainService"`
 }
 
@@ -88,91 +92,91 @@ func main() {
 			file.NewSource(configPath),
 		),
 	)
+
 	defer c.Close()
 
 	if err := c.Load(); err != nil {
 		panic(err)
 	}
 
-	// var bc conf.Bootstrap
-	// if err := c.Scan(&bc); err != nil {
-	// 	panic(err)
-	// }
+	var bc conf.Bootstrap
+	if err := c.Scan(&bc); err != nil {
+		panic(err)
+	}
 
-	// // Initialize Consul client with config address
-	// consulConfig := consulAPI.DefaultConfig()
-	// consulConfig.Address = bc.Consul.Address
+	// Initialize Consul client with config address
+	consulConfig := consulAPI.DefaultConfig()
+	consulConfig.Address = bc.Consul.Address
 
-	// consulClient, err := consulAPI.NewClient(consulConfig)
-	// if err != nil {
-	// 	logger.Log(log.LevelError, "msg", "failed to create consul client", "error", err)
-	// 	panic(err)
-	// }
+	consulClient, err := consulAPI.NewClient(consulConfig)
+	if err != nil {
+		logger.Log(log.LevelError, "msg", "failed to create consul client", "error", err)
+		panic(err)
+	}
 
 	// Get configuration from Consul
-	// kv := consulClient.KV()
+	kv := consulClient.KV()
 
 	// Read MongoDB configuration
-	// mongodbPair, _, err := kv.Get("Transaction", nil)
-	// if err != nil {
-	// 	logger.Log(log.LevelError, "msg", "failed to get mongodb config from consul", "error", err)
-	// 	panic(err)
-	// }
-	// if mongodbPair == nil {
-	// 	logger.Log(log.LevelError, "msg", "mongodb config not found in consul")
-	// 	panic("mongodb config not found in consul")
-	// }
+	mongodbPair, _, err := kv.Get("tipster", nil)
+	if err != nil {
+		logger.Log(log.LevelError, "msg", "failed to get mongodb config from consul", "error", err)
+		panic(err)
+	}
+	if mongodbPair == nil {
+		logger.Log(log.LevelError, "msg", "mongodb config not found in consul")
+		panic("mongodb config not found in consul")
+	}
 
 	// Read GRPC configuration
-	// grpcPair, _, err := kv.Get("Global", nil)
-	// if err != nil {
-	// 	logger.Log(log.LevelError, "msg", "failed to get grpc config from consul", "error", err)
-	// 	panic(err)
-	// }
-	// if grpcPair == nil {
-	// 	logger.Log(log.LevelError, "msg", "grpc config not found in consul")
-	// 	panic("grpc config not found in consul")
-	// }
+	grpcPair, _, err := kv.Get("Global", nil)
+	if err != nil {
+		logger.Log(log.LevelError, "msg", "failed to get grpc config from consul", "error", err)
+		panic(err)
+	}
+	if grpcPair == nil {
+		logger.Log(log.LevelError, "msg", "grpc config not found in consul")
+		panic("grpc config not found in consul")
+	}
 
 	// Parse MongoDB config
-	// var mongodbCfg MongoDBConfig
-	// // if err := json.Unmarshal(mongodbPair.Value, &mongodbCfg); err != nil {
-	// // 	logger.Log(log.LevelError, "msg", "failed to parse mongodb consul config", "error", err)
-	// // 	panic(err)
-	// // }
+	var mongodbCfg MongoDBConfig
+	if err := json.Unmarshal(mongodbPair.Value, &mongodbCfg); err != nil {
+		logger.Log(log.LevelError, "msg", "failed to parse mongodb consul config", "error", err)
+		panic(err)
+	}
 
 	// // Parse GRPC config
-	// var grpcCfg GlobalConfig
-	// if err := json.Unmarshal(grpcPair.Value, &grpcCfg); err != nil {
-	// 	logger.Log(log.LevelError, "msg", "failed to parse grpc consul config", "error", err)
-	// 	panic(err)
-	// }
+	var grpcCfg GlobalConfig
+	if err := json.Unmarshal(grpcPair.Value, &grpcCfg); err != nil {
+		logger.Log(log.LevelError, "msg", "failed to parse grpc consul config", "error", err)
+		panic(err)
+	}
 
 	// Create the Bootstrap config
-	// bc.Mongodb = &conf.MongoDbConnection{
-	// 	Uri:      mongodbCfg.MongoDbConnection.Uri,
-	// 	Database: mongodbCfg.MongoDbConnection.Database,
-	// }
+	bc.Mongodb = &conf.MongoDbConnection{
+		Uri:      mongodbCfg.MongoDbConnection.Uri,
+		Database: mongodbCfg.MongoDbConnection.Database,
+	}
 
 	// Convert Port from string to int32
-	// port, err := strconv.ParseInt(grpcCfg.DomainService.Transaction.Port, 10, 32)
-	// if err != nil {
-	// 	logger.Log(log.LevelError, "msg", "failed to parse port number", "error", err)
-	// 	panic(err)
-	// }
+	port, err := strconv.ParseInt(grpcCfg.DomainService.Tipster.Port, 10, 32)
+	if err != nil {
+		logger.Log(log.LevelError, "msg", "failed to parse port number", "error", err)
+		panic(err)
+	}
 
-	// host := grpcCfg.DomainService.Transaction.HostName
+	host := grpcCfg.DomainService.Tipster.HostName
 
-	// bc.GrpcServer = &conf.GRPCServer{
-	// 	Port: int32(port),
-	// 	Host: host,
-	// }
+	bc.GrpcServer = &conf.GRPCServer{
+		Port: int32(port),
+		Host: host,
+	}
 
 	// Initialize MongoDB client
 
-	// mongoClient, err := mongo.Connect(context.Background(), options.Client().ApplyURI(bc.Mongodb.Uri))
-	mongoClient, err := mongo.Connect(context.Background(), options.Client().ApplyURI("mongodb://root:pass.123@localhost:22097/"))
-	// mongoClient, err := mongo.Connect(context.Background(), options.Client().ApplyURI("mongodb+srv://BrandonBaker:Atlas12345@cluster0.dgujh.mongodb.net/"))
+	mongoClient, err := mongo.Connect(context.Background(), options.Client().ApplyURI(bc.Mongodb.Uri))
+	// mongoClient, err := mongo.Connect(context.Background(), options.Client().ApplyURI("mongodb://root:pass.123@localhost:22097/"))
 	if err != nil {
 		logger.Log(log.LevelError, "msg", "failed to connect to mongodb", "error", err)
 		panic(err)
@@ -185,8 +189,8 @@ func main() {
 	)
 
 	// Initialize repository
-	// db := mongoClient.Database(bc.Mongodb.Database)
-	db := mongoClient.Database("tipster")
+	db := mongoClient.Database(bc.Mongodb.Database)
+	// db := mongoClient.Database("tipster")
 	socialRepo := repository.NewSocialRepository(db, socialLogger)
 	// HTTP Server
 	httpSrv := http.NewServer(
@@ -194,8 +198,8 @@ func main() {
 	)
 
 	// gRPC Server
-	// grpcAddr := fmt.Sprintf("%s:%d", bc.GrpcServer.Host, bc.GrpcServer.Port)
-	grpcAddr := fmt.Sprintf("%s:%d", "0.0.0.0", 9000)
+	grpcAddr := fmt.Sprintf("%s:%d", bc.GrpcServer.Host, bc.GrpcServer.Port)
+	// grpcAddr := fmt.Sprintf("%s:%d", "0.0.0.0", 9000)
 	grpcSrv := grpc.NewServer(
 		grpc.Address(grpcAddr),
 		grpc.Middleware(
