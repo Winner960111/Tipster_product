@@ -1,4 +1,4 @@
-FROM artifacts.ym-dev.org:8083/mongo:7.0.12
+FROM mongo:7.0.12
 
 ENV MONGO_INITDB_ROOT_USERNAME=root
 ENV MONGO_INITDB_ROOT_PASSWORD=pass.123

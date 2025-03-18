@@ -1,4 +1,4 @@
-use transaction;
+use tipster;
 
 errorHandler = function (action, errorAction) {
     try {
@@ -12,10 +12,10 @@ errorHandler = function (action, errorAction) {
 errorHandler(
     () => db.createUser(
         {
-            user: "support",
+            user: "root",
             pwd: "pass.123",
-            roles: [{role: "readWrite", db: "transaction"}]
+            roles: [{role: "readWrite", db: "tipster"}]
         }
     ),
-    () => db.grantRolesToUser("support", [{role: "readWrite", db: "transaction"}])
+    () => db.grantRolesToUser("root", [{role: "readWrite", db: "tipster"}])
 );

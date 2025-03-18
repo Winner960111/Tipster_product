@@ -169,8 +169,10 @@ func main() {
 	// }
 
 	// Initialize MongoDB client
+
 	// mongoClient, err := mongo.Connect(context.Background(), options.Client().ApplyURI(bc.Mongodb.Uri))
-	mongoClient, err := mongo.Connect(context.Background(), options.Client().ApplyURI("mongodb+srv://BrandonBaker:Atlas12345@cluster0.dgujh.mongodb.net/"))
+	mongoClient, err := mongo.Connect(context.Background(), options.Client().ApplyURI("mongodb://root:pass.123@localhost:22097/"))
+	// mongoClient, err := mongo.Connect(context.Background(), options.Client().ApplyURI("mongodb+srv://BrandonBaker:Atlas12345@cluster0.dgujh.mongodb.net/"))
 	if err != nil {
 		logger.Log(log.LevelError, "msg", "failed to connect to mongodb", "error", err)
 		panic(err)

@@ -2,7 +2,6 @@ package repository
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/go-kratos/kratos/v2/log"
@@ -54,94 +53,12 @@ func NewSocialRepository(db *mongo.Database, logger log.Logger) SocialRepository
 	collection := db.Collection("users")
 	tipCollection := db.Collection("tips")
 	commentCollection := db.Collection("comments")
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	// User Collection Indexes
-	userIndexes := []mongo.IndexModel{
-		{
-			Keys:    bson.D{{Key: "email", Value: 1}},
-			Options: options.Index().SetUnique(true).SetName("idx_email_unique"),
-		},
-		{
-			Keys:    bson.D{{Key: "username", Value: 1}},
-			Options: options.Index().SetName("idx_username_unique"),
-		},
-		{
-			Keys:    bson.D{{Key: "tags", Value: 1}},
-			Options: options.Index().SetName("idx_tags"),
-		},
-		{
-			Keys: bson.D{
-				{Key: "createdAt", Value: -1},
-				{Key: "updatedAt", Value: -1},
-			},
-			Options: options.Index().SetName("idx_user_timestamps"),
-		},
-	}
-
-	// Tip Collection Indexes
-	tipIndexes := []mongo.IndexModel{
-		{
-			Keys:    bson.D{{Key: "tipsterId", Value: 1}},
-			Options: options.Index().SetName("idx_tipsterId"),
-		},
-		{
-			Keys:    bson.D{{Key: "tags", Value: 1}},
-			Options: options.Index().SetName("idx_tip_tags"),
-		},
-		{
-			Keys: bson.D{
-				{Key: "createdAt", Value: -1},
-				{Key: "updatedAt", Value: -1},
-			},
-			Options: options.Index().SetName("idx_tip_timestamps"),
-		},
-	}
-
-	// Comment Collection Indexes
-	commentIndexes := []mongo.IndexModel{
-		{
-			Keys:    bson.D{{Key: "tipId", Value: 1}},
-			Options: options.Index().SetName("idx_tipId"),
-		},
-		{
-			Keys:    bson.D{{Key: "userId", Value: 1}},
-			Options: options.Index().SetName("idx_userId"),
-		},
-		{
-			Keys:    bson.D{{Key: "parentId", Value: 1}},
-			Options: options.Index().SetName("idx_parentId"),
-		},
-		{
-			Keys: bson.D{
-				{Key: "createdAt", Value: -1},
-				{Key: "updatedAt", Value: -1},
-			},
-			Options: options.Index().SetName("idx_comment_timestamps"),
-		},
-	}
-
-	// Create indexes for each collection
-	createIndexes(ctx, collection, userIndexes, logger)
-	createIndexes(ctx, tipCollection, tipIndexes, logger)
-	createIndexes(ctx, commentCollection, commentIndexes, logger)
 
 	return &socialRepository{
 		collection:        collection,
 		tipCollection:     tipCollection,
 		commentCollection: commentCollection,
 		logger:            logger,
-	}
-}
-
-func createIndexes(ctx context.Context, collection *mongo.Collection, indexes []mongo.IndexModel, logger log.Logger) {
-	_, err := collection.Indexes().CreateMany(ctx, indexes)
-	if err != nil {
-		logger.Log(log.LevelError, "msg", fmt.Sprintf("Failed to create indexes for collection %s", collection.Name()), "error", err)
-		panic(fmt.Sprintf("Failed to create indexes: %v", err))
-	} else {
-		logger.Log(log.LevelInfo, "msg", fmt.Sprintf("Indexes created successfully for collection %s", collection.Name()))
 	}
 }
 

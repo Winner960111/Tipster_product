@@ -1,5 +1,5 @@
 services:
-  transaction-mongodb:
+  tipster-mongodb:
     build:
       context: ../
       dockerfile: ./database/mongo/dockerfile

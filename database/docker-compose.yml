@@ -1,6 +1,6 @@
 services:
-  transaction-mongodb:
-    container_name: "ym-domainservice-transaction-mongodb"
+  tipster-mongodb:
+    container_name: "tipsters-mongodb"
     ports:
       - "22097:27017"
-    image: ym-domain-service-transaction-mongodb:latest
+    image: tipsters:latest
