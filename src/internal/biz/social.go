@@ -84,35 +84,23 @@ func (s *SocialService) DeleteUser(ctx context.Context, userID primitive.ObjectI
 	}
 	return nil
 }
-func (s *SocialService) ListUsers(ctx context.Context, filter bson.M, limit int64) (*pb.ListUserResponse_ListUsersData, error) {
-	users, err := s.Repo.ListUsers(ctx, filter, limit)
-
-	var pbUsers []*pb.CreateUserResponse_UserData
-	var lastUserID primitive.ObjectID
-
-	for _, user := range users {
-		lastUserID = user.ID
-
-		userData, err := s.Transformer(ctx, user)
+func (s *SocialService) ListUsers(ctx context.Context, req *pb.ListUserRequest) ([]*model.User, error) {
+	filter := bson.M{}
+	if req.NextCursor != "" {
+		cursorID, err := primitive.ObjectIDFromHex(req.NextCursor)
 		if err != nil {
 			return nil, errors.ToRpcError(err)
 		}
-		pbUsers = append(pbUsers, userData)
+		filter["_id"] = bson.M{"$gt": cursorID}
 	}
 
-	// Determine `NextCursor`
-	nextCursor := ""
-	if len(pbUsers) == int(limit) {
-		nextCursor = lastUserID.Hex()
-	}
+	users, err := s.Repo.ListUsers(ctx, filter, int64(req.PageSize))
 	if err != nil {
 		return nil, errors.ToRpcError(err)
 	}
-	return &pb.ListUserResponse_ListUsersData{
-		Users:      pbUsers,
-		NextCursor: nextCursor,
-	}, nil
+	return users, nil
 }
+
 func (s *SocialService) FollowTipster(ctx context.Context, userID, tipsterID primitive.ObjectID) (*pb.FollowTipsterResponse_FollowData, error) {
 	err := s.Repo.FollowTipster(ctx, userID, tipsterID)
 	if err != nil {

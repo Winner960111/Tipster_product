@@ -6,11 +6,9 @@ import (
 	"src/internal/biz"
 	"src/internal/errors"
 	"src/internal/repository"
-
 	pb "src/protos/Tipster"
 
 	"github.com/go-kratos/kratos/v2/log"
-	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 )
@@ -18,9 +16,12 @@ import (
 const (
 	CodeOk          = "COMM0000"
 	CodeInvalidID   = "COMM0101"
+	CodeInvalid     = "COMM0102"
 	CodeInvalidData = "COMM0201"
+	CodeNotFound    = "COMM0300"
 	CodeEmailExist  = "COMM0400"
 	CodeError       = "COMM0501"
+	CodeFetchError  = "COMM0502"
 )
 
 type SocialServiceService struct {
@@ -65,7 +66,7 @@ func (s *SocialServiceService) GetUser(ctx context.Context, req *pb.GetUserReque
 		return nil, errors.ToRpcError(err)
 	}
 
-	data, err := s.Transformer(ctx, user)
+	data, err := s.userTransformer(ctx, user)
 	if err != nil {
 		return nil, errors.ToRpcError(err)
 	}
@@ -141,21 +142,10 @@ func (s *SocialServiceService) DeleteUser(ctx context.Context, req *pb.DeleteUse
 }
 
 func (s *SocialServiceService) ListUsers(ctx context.Context, req *pb.ListUserRequest) (*pb.ListUserResponse, error) {
-	// Pagination settings
-	filter := bson.M{}
-	if req.NextCursor != "" {
-		cursorID, err := primitive.ObjectIDFromHex(req.NextCursor)
-		if err != nil {
-			return &pb.ListUserResponse{
-				Code: CodeInvalidID,
-				Msg:  "Invalid cursor format",
-			}, nil
-		}
-		filter["_id"] = bson.M{"$gt": cursorID}
-	}
 
-	// Fetch users
-	users, err := s.biz.ListUsers(ctx, filter, int64(req.PageSize))
+	pageSize := int64(req.PageSize)
+
+	users, err := s.biz.ListUsers(ctx, req)
 	if err != nil {
 		s.logger.Log(log.LevelError, "failed to fetch users", "error", err)
 		return &pb.ListUserResponse{
@@ -164,13 +154,15 @@ func (s *SocialServiceService) ListUsers(ctx context.Context, req *pb.ListUserRe
 		}, nil
 	}
 
+	data, err := s.usersTransformer(ctx, users, pageSize)
+	if err != nil {
+		return nil, errors.ToRpcError(err)
+	}
+
 	return &pb.ListUserResponse{
 		Code: CodeOk,
 		Msg:  "Users retrieved successfully",
-		Data: &pb.ListUserResponse_ListUsersData{
-			Users:      pbUsers,
-			NextCursor: nextCursor,
-		},
+		Data: data,
 	}, nil
 }
 func (s *SocialServiceService) FollowTipster(ctx context.Context, req *pb.FollowTipsterRequest) (*pb.FollowTipsterResponse, error) {
