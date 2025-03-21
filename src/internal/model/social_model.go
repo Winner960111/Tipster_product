@@ -3,12 +3,10 @@ package model
 import (
 	"time"
 
-	"github.com/go-kratos/kratos/v2/log"
-
 	"go.mongodb.org/mongo-driver/bson/primitive"
-	"go.mongodb.org/mongo-driver/mongo"
 )
 
+// User model
 type User struct {
 	ID        primitive.ObjectID   `bson:"_id,omitempty"`
 	Username  string               `bson:"username"`
@@ -33,6 +31,7 @@ type UserUpdates struct {
 	UpdatedAt time.Time `bson:"updatedAt"`
 }
 
+// Tip model
 type Tip struct {
 	ID        primitive.ObjectID   `bson:"_id,omitempty"`
 	TipsterID string               `bson:"tipsterId"`
@@ -46,6 +45,7 @@ type Tip struct {
 	UpdatedAt time.Time            `bson:"updatedAt"`
 }
 
+// Comment model
 type Comment struct {
 	ID        primitive.ObjectID   `bson:"_id"`
 	TipID     string               `bson:"tipId"`
@@ -56,11 +56,4 @@ type Comment struct {
 	Unlikes   []primitive.ObjectID `bson:"unlikes"`
 	CreatedAt time.Time            `bson:"createdAt"`
 	UpdatedAt time.Time            `bson:"updatedAt"`
-}
-
-type SocialRepo struct {
-	userCollection    *mongo.Collection
-	tipCollection     *mongo.Collection
-	commentCollection *mongo.Collection
-	logger            log.Logger
 }

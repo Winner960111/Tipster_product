@@ -4,18 +4,18 @@ import (
 	"context"
 	"time"
 
+	"src/internal/errors"
+	"src/internal/model"
+
 	"github.com/go-kratos/kratos/v2/log"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-
-	"src/internal/model"
 )
 
 type SocialRepository interface {
 	CreateUser(ctx context.Context, user *model.User) (string, error)
-	CheckEmail(ctx context.Context, email string) *mongo.SingleResult
 	GetUser(ctx context.Context, userID primitive.ObjectID) (*model.User, error)
 	GetUserDetails(ctx context.Context, userIDs []primitive.ObjectID) ([]*model.UserDetail, error)
 	UpdateUser(ctx context.Context, userID primitive.ObjectID, updates *model.UserUpdates) error
@@ -63,26 +63,27 @@ func NewSocialRepository(db *mongo.Database, logger log.Logger) SocialRepository
 }
 
 func (r *socialRepository) CreateUser(ctx context.Context, user *model.User) (string, error) {
+	filter := bson.M{"email": user.Email}
+	var result model.User
+	err := r.collection.FindOne(ctx, filter).Decode(&result)
+	if err == nil {
+		return "exist", nil
+	}
 	if user.ID.IsZero() {
 		user.ID = primitive.NewObjectID()
 	}
-	_, err := r.collection.InsertOne(ctx, user)
+	_, err = r.collection.InsertOne(ctx, user)
 	if err != nil {
 		return "", err
 	}
 	return user.ID.Hex(), nil
 }
 
-func (r *socialRepository) CheckEmail(ctx context.Context, email string) *mongo.SingleResult {
-	filter := bson.M{"email": email}
-	return r.collection.FindOne(ctx, filter)
-}
-
 func (r *socialRepository) GetUser(ctx context.Context, userID primitive.ObjectID) (*model.User, error) {
 	var user model.User
 	err := r.collection.FindOne(ctx, bson.M{"_id": userID}).Decode(&user)
 	if err != nil {
-		return nil, err
+		return nil, errors.ToRpcError(err)
 	}
 	return &user, nil
 }
@@ -117,7 +118,7 @@ func (r *socialRepository) UpdateUser(ctx context.Context, userID primitive.Obje
 		bson.M{"$set": updates},
 	)
 	if err != nil {
-		return err
+		return errors.ToRpcError(err)
 	}
 	if result.MatchedCount == 0 {
 		return mongo.ErrNoDocuments
@@ -155,65 +156,47 @@ func (r *socialRepository) ListUsers(ctx context.Context, filter bson.M, limit i
 }
 
 func (r *socialRepository) FollowTipster(ctx context.Context, userID, tipsterID primitive.ObjectID) error {
-	session, err := r.collection.Database().Client().StartSession()
+	// Update user's following list
+	userUpdate := bson.M{
+		"$addToSet": bson.M{
+			"following": tipsterID,
+		},
+	}
+	_, err := r.collection.UpdateOne(ctx, bson.M{"_id": userID}, userUpdate)
 	if err != nil {
 		return err
 	}
-	defer session.EndSession(ctx)
 
-	_, err = session.WithTransaction(ctx, func(sessCtx mongo.SessionContext) (interface{}, error) {
-		userUpdate := bson.M{
-			"$addToSet": bson.M{
-				"following": tipsterID,
-			},
-		}
-		tipsterUpdate := bson.M{
-			"$addToSet": bson.M{
-				"followers": userID,
-			},
-		}
-
-		_, err := r.collection.UpdateOne(sessCtx, bson.M{"_id": userID}, userUpdate)
-		if err != nil {
-			return nil, err
-		}
-
-		_, err = r.collection.UpdateOne(sessCtx, bson.M{"_id": tipsterID}, tipsterUpdate)
-		return nil, err
-	})
-
+	// Update tipster's followers list
+	tipsterUpdate := bson.M{
+		"$addToSet": bson.M{
+			"followers": userID,
+		},
+	}
+	_, err = r.collection.UpdateOne(ctx, bson.M{"_id": tipsterID}, tipsterUpdate)
 	return err
 }
+
 func (r *socialRepository) UnfollowTipster(ctx context.Context, userID, tipsterID primitive.ObjectID) error {
-	session, err := r.collection.Database().Client().StartSession()
+
+	userUpdate := bson.M{
+		"$pull": bson.M{
+			"following": tipsterID,
+		},
+	}
+	_, err := r.collection.UpdateOne(ctx, bson.M{"_id": userID}, userUpdate)
 	if err != nil {
 		return err
 	}
-	defer session.EndSession(ctx)
-
-	_, err = session.WithTransaction(ctx, func(sessCtx mongo.SessionContext) (interface{}, error) {
-		userUpdate := bson.M{
-			"$pull": bson.M{
-				"following": tipsterID,
-			},
-		}
-		tipsterUpdate := bson.M{
-			"$pull": bson.M{
-				"followers": userID,
-			},
-		}
-
-		_, err := r.collection.UpdateOne(sessCtx, bson.M{"_id": userID}, userUpdate)
-		if err != nil {
-			return nil, err
-		}
-
-		_, err = r.collection.UpdateOne(sessCtx, bson.M{"_id": tipsterID}, tipsterUpdate)
-		return nil, err
-	})
-
+	tipsterUpdate := bson.M{
+		"$pull": bson.M{
+			"followers": userID,
+		},
+	}
+	_, err = r.collection.UpdateOne(ctx, bson.M{"_id": tipsterID}, tipsterUpdate)
 	return err
 }
+
 func (r *socialRepository) CreateTip(ctx context.Context, tip *model.Tip) (primitive.ObjectID, error) {
 
 	result, err := r.tipCollection.InsertOne(ctx, tip)
