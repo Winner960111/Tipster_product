@@ -173,7 +173,9 @@ func (r *socialRepository) ListReplies(ctx context.Context, parentCommentID stri
 	for cursor.Next(ctx) {
 		var reply model.Comment
 		if err := cursor.Decode(&reply); err == nil {
-			replies = append(replies, &reply)
+			if parentCommentID != reply.ID.Hex() {
+				replies = append(replies, &reply)
+			}
 		}
 	}
 	return replies, cursor.Err()
